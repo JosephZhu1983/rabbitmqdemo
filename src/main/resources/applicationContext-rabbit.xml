@@ -1,0 +1,97 @@
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:rabbit="http://www.springframework.org/schema/rabbit"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xsi:schemaLocation="http://www.springframework.org/schema/rabbit
+           http://www.springframework.org/schema/rabbit/spring-rabbit.xsd
+           http://www.springframework.org/schema/beans
+           http://www.springframework.org/schema/beans/spring-beans.xsd http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd">
+
+    <context:component-scan base-package="me.josephzhu.springrabbitmqdemo" />
+
+    <bean id="jackson2JsonMessageConverter" class="org.springframework.amqp.support.converter.Jackson2JsonMessageConverter" />
+
+    <bean id="rabbitWriteConnectionFactory" class="org.springframework.amqp.rabbit.connection.CachingConnectionFactory">
+        <constructor-arg name="rabbitConnectionFactory" ref="internalConnectionFactory" />
+        <property name="host" value="localhost"></property>
+        <property name="port" value="5672" />
+        <property name="username" value="zhuye"/>
+        <property name="password" value="111111"/>
+        <property name="connectionThreadFactory" ref="customizableWriteThreadFactory" />
+        <property name="connectionTimeout" value="1000" />
+        <property name="closeTimeout" value="1000" />
+        <property name="cacheMode" value="CHANNEL" />
+        <!--<property name="connectionCacheSize" value="10" />-->
+        <!--<property name="channelCacheSize" value="120" />-->
+        <!--<property name="channelCheckoutTimeout" value="1000"/>-->
+    </bean>
+    <!--<bean id="rabbitReadConnectionFactory" class="org.springframework.amqp.rabbit.connection.CachingConnectionFactory">-->
+        <!--<constructor-arg name="rabbitConnectionFactory" ref="internalConnectionFactory" />-->
+        <!--<property name="host" value="localhost"></property>-->
+        <!--<property name="port" value="5672" />-->
+        <!--<property name="username" value="zhuye"/>-->
+        <!--<property name="password" value="111111"/>-->
+        <!--<property name="connectionThreadFactory" ref="customizableReadThreadFactory" />-->
+        <!--<property name="connectionTimeout" value="1000" />-->
+        <!--<property name="closeTimeout" value="1000" />-->
+        <!--<property name="cacheMode" value="CONNECTION" />-->
+        <!--<property name="connectionCacheSize" value="10" />-->
+        <!--&lt;!&ndash;<property name="executor">&ndash;&gt;-->
+            <!--&lt;!&ndash;<bean class="java.util.concurrent.Executors" factory-method="newFixedThreadPool">&ndash;&gt;-->
+            <!--&lt;!&ndash;<constructor-arg value="100"></constructor-arg>&ndash;&gt;-->
+            <!--&lt;!&ndash;</bean>&ndash;&gt;-->
+        <!--&lt;!&ndash;</property>&ndash;&gt;-->
+    <!--</bean>-->
+
+    <bean id="internalConnectionFactory" class="com.rabbitmq.client.ConnectionFactory">
+        <property name="exceptionHandler" ref="exceptionHandler" />
+    </bean>
+    <bean id="exceptionHandler" class="me.josephzhu.springrabbitmqdemo.DemoExceptionHandler" />
+    <bean id="customizableReadThreadFactory" class="org.springframework.scheduling.concurrent.CustomizableThreadFactory">
+        <constructor-arg value="rabbitmq-read-" />
+    </bean>
+    <bean id="customizableWriteThreadFactory" class="org.springframework.scheduling.concurrent.CustomizableThreadFactory">
+        <constructor-arg value="rabbitmq-write-" />
+    </bean>
+    <bean class="me.josephzhu.springrabbitmqdemo.DemoAppListener"></bean>
+    <bean id="demoMessageListener" class="me.josephzhu.springrabbitmqdemo.DemoMessageListener" />
+    <bean class="me.josephzhu.springrabbitmqdemo.DemoMessageSender" />
+
+    <rabbit:admin connection-factory="rabbitWriteConnectionFactory"/>
+    <!--队列配置-->
+    <!--<rabbit:queue name="myqueue" durable="true" auto-delete="false" exclusive="false" id="myqueue"/>-->
+    <rabbit:queue name="mydelayedqueue" durable="true" auto-delete="false" exclusive="false" id="myqueue"/>
+
+    <!--exchange和queue绑定配置-->
+    <!--<rabbit:topic-exchange name="myexchange" durable="true" auto-delete="false">-->
+        <!--<rabbit:bindings>-->
+            <!--<rabbit:binding queue="myqueue" pattern="*"></rabbit:binding>-->
+        <!--</rabbit:bindings>-->
+    <!--</rabbit:topic-exchange>-->
+
+    <rabbit:topic-exchange name="delayedexchange" delayed="true" durable="true" auto-delete="false">
+        <rabbit:bindings>
+            <rabbit:binding queue="mydelayedqueue" pattern="*"></rabbit:binding>
+        </rabbit:bindings>
+    </rabbit:topic-exchange>
+
+    <!--listener配置-->
+    <rabbit:listener-container connection-factory="rabbitWriteConnectionFactory" acknowledge="manual" concurrency="1" prefetch="10">
+        <rabbit:listener queues="mydelayedqueue" ref="demoMessageListener"  />
+    </rabbit:listener-container>
+
+    <!--template配置-->
+    <!--<rabbit:template id="rabbitTemplate"-->
+                     <!--connection-factory="rabbitWriteConnectionFactory"-->
+                     <!--exchange="myexchange"-->
+                     <!--message-converter="jackson2JsonMessageConverter"-->
+    <!--/>-->
+
+
+    <rabbit:template id="rabbitDelayedTemplate"
+                     connection-factory="rabbitWriteConnectionFactory"
+                     exchange="delayedexchange"
+                     message-converter="jackson2JsonMessageConverter"
+    />
+
+</beans>
